@@ -10,17 +10,18 @@ import time
 import torch
 import torch.nn as nn
 
-from models import TPA_LSTM_Modified
+# from models import TPA_LSTM_Modified
+from models import TPA_LSTM
 from utils import *
 import numpy as np;
 import importlib
-import Optim
 
 parser = argparse.ArgumentParser(description='PyTorch Time series forecasting')
 parser.add_argument('--data', type=str, default="data/exchange_rate.txt",
                     help='location of the data file')
 #, required=True
-parser.add_argument('--model', type=str, default='TPA_LSTM_Modified',
+# TPA_LSTM_Modified
+parser.add_argument('--model', type=str, default='TPA_LSTM',
                     help='')
 parser.add_argument('--hidden_state_features', type=int, default=12,
                     help='number of features in LSTMs hidden states')
@@ -57,7 +58,7 @@ parser.add_argument('--log_interval', type=int, default=2000, metavar='N',
                     help='report interval')
 parser.add_argument('--save', type=str, default='model/model.pt',
                     help='path to save the final model')
-parser.add_argument('--cuda', type=str, default=False)
+parser.add_argument('--cuda', type=str, default=True)
 parser.add_argument('--optim', type=str, default='adam')
 parser.add_argument('--lr', type=float, default=1e-05)
 parser.add_argument('--momentum', type=float, default=0.5)
@@ -68,6 +69,7 @@ parser.add_argument('--L1Loss', type=bool, default=True)
 parser.add_argument('--normalize', type=int, default=2)
 parser.add_argument('--output_fun', type=str, default='sigmoid')
 args = parser.parse_args()
+
 
 def evaluate(data, X, Y, model, evaluateL2, evaluateL1, batch_size):
     model.eval();
@@ -126,26 +128,25 @@ def train(data, X, Y, model, criterion, optim, batch_size):  # X is train set, Y
     return 1
 
 
-
-
-Data = Data_utility(args.data, 0.6, 0.2, args.cuda, args.horizon, args.window, args.normalize); #SPLITS THE DATA IN TRAIN AND VALIDATION SET, ALONG WITH OTHER THINGS, SEE CODE FOR MORE
+# SPLITS THE DATA IN TRAIN AND VALIDATION SET, ALONG WITH OTHER THINGS, SEE CODE FOR MORE
+Data = Data_utility(args.data, 0.6, 0.2, args.cuda, args.horizon, args.window, args.normalize);
 print(Data.rse);
 
 device = 'cpu'
 
+model = eval(args.model).Model(args, Data)
 
-model = eval(args.model).Model(args, Data);
 if(args.cuda):
     model.cuda()
 
-
-#print(dict(model.named_parameters()))
 if args.L1Loss:
     criterion = nn.L1Loss(size_average=False);
 else:
     criterion = nn.MSELoss(size_average=False);
+
 evaluateL2 = nn.MSELoss(size_average=False);
 evaluateL1 = nn.L1Loss(size_average=False)
+
 if args.cuda:
     criterion = criterion.cuda()
     evaluateL1 = evaluateL1.cuda();
@@ -154,9 +155,7 @@ if args.cuda:
 nParams = sum([p.nelement() for p in model.parameters()])
 print('* number of parameters: %d' % nParams)
 
-#print(list(model.parameters())[0].grad)
 list(model.parameters())
-#optim = Optim.Optim(model.parameters(), args.optim, args.lr, args.clip,)
 optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)  #.01 1e-05
 best_val = 10000000;
 
@@ -165,7 +164,6 @@ try:
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
         train_loss = train(Data, Data.train[0], Data.train[1], model, criterion, optim, args.batch_size)
-        #print(train_loss)
         val_loss, val_rae, val_corr = evaluate(Data, Data.valid[0], Data.valid[1], model, evaluateL2, evaluateL1, args.batch_size);
         print('| end of epoch {:3d} | time: {:5.2f}s | train_loss {:5.4f} | valid rse {:5.4f} | valid rae {:5.4f} | valid corr  {:5.4f}'.format(
                 epoch, (time.time() - epoch_start_time), train_loss, val_loss, val_rae, val_corr))
